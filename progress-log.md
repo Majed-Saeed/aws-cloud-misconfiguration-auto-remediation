@@ -11,9 +11,10 @@
   - root-account-mfa-enabled
 
 Status: Completed
+## AWS Config Dashboard
 
-### AWS Config Dashboard
-![AWS Config Dashboard](aws-config-dashboard.png)
+![AWS Config Dashboard](screenshots/aws-config-dashboard.png)
 
-### AWS Config Rules
-![AWS Config Rules](aws-config-rules.png)
+## AWS Config Rules
+
+![AWS Config Rules](screenshots/aws-config-rules.png)
