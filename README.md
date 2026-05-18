@@ -129,21 +129,6 @@ Result:
 REMEDIATED SUCCESSFULLY
 ```
 
----
-
-# 📂 Repository Structure
-
-```text
-aws-cloud-misconfiguration-auto-remediation/
-│
-├── README.md
-├── progress-log.md
-├── screenshots/
-├── lambda/
-└── docs/
-```
-
----
 
 # 📈 Future Improvements
 
