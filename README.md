@@ -1,227 +1,254 @@
-# AWS Cloud Misconfiguration Detection and Auto-Remediation Framework
+# AWS Cloud Misconfiguration Auto-Remediation
 
-A serverless cloud security automation framework that detects AWS security misconfigurations, automatically remediates supported issues, sends real-time notifications, and maintains an audit trail using AWS native services.
-
----
-
-## 📌 Project Overview
-
-Cloud misconfigurations are one of the most common causes of security incidents in cloud environments. This project was developed to automatically detect non-compliant AWS resources and respond without manual intervention.
-
-The system uses AWS Config to monitor resources, Amazon EventBridge to process compliance events, AWS Lambda to perform remediation actions, Amazon SNS to send notifications, and Amazon DynamoDB to maintain remediation audit logs.
+An AWS serverless security automation project developed as a Final Year Project (FYP) to detect cloud misconfigurations, automatically remediate security issues, notify administrators, and maintain an audit trail using AWS native services.
 
 ---
 
-## 🚀 Features
+## Project Overview
 
-- Continuous compliance monitoring using AWS Config
-- Event-driven remediation using Amazon EventBridge
-- Automated remediation using AWS Lambda
-- Real-time email notifications via Amazon SNS
-- Audit logging with Amazon DynamoDB
-- CloudWatch monitoring and execution logs
-- Fully serverless architecture
+Cloud misconfigurations remain one of the most common causes of security incidents in cloud environments. Manual monitoring and remediation can be slow, error-prone, and difficult to scale.
+
+This project implements an automated cloud security remediation framework that continuously monitors AWS resources using AWS Config, detects non-compliant configurations, triggers automated remediation through AWS Lambda, records remediation activities in DynamoDB, and sends security notifications through Amazon SNS.
+
+The solution follows an event-driven serverless architecture and demonstrates how AWS native services can be combined to improve cloud security posture with minimal operational overhead.
 
 ---
 
-## 🏗️ AWS Services Used
+## Objectives
 
-- AWS Config
-- Amazon EventBridge
-- AWS Lambda
-- Amazon S3
-- Amazon EC2
-- Amazon SNS
-- Amazon DynamoDB
-- Amazon CloudWatch
-- AWS IAM
+- Detect AWS cloud security misconfigurations automatically.
+- Perform remediation actions without manual intervention.
+- Generate real-time security alerts.
+- Maintain remediation audit logs for tracking and reporting.
+- Demonstrate practical implementation of cloud security automation.
+- Reduce response time to cloud security incidents.
 
 ---
 
-## ⚙️ Architecture
+## Key Features
+
+### Detection
+
+- AWS Config compliance monitoring
+- Real-time event detection
+- Continuous resource evaluation
+
+### Automated Remediation
+
+- Block public S3 bucket access
+- Remove insecure bucket policies
+- Close publicly exposed SSH access (Port 22)
+- Close publicly exposed RDP access (Port 3389)
+- Disable public accessibility for Amazon RDS instances
+
+### Alerting
+
+- Email notifications using Amazon SNS
+- Remediation status reporting
+- Security incident visibility
+
+### Audit Logging
+
+- DynamoDB remediation records
+- Historical remediation tracking
+- Event auditing and reporting
+
+### Monitoring
+
+- CloudWatch Logs integration
+- Lambda execution monitoring
+- Operational visibility
+
+---
+
+## AWS Services Used
+
+| Service | Purpose |
+|----------|----------|
+| AWS Config | Detect cloud misconfigurations |
+| Amazon EventBridge | Trigger remediation workflows |
+| AWS Lambda | Execute remediation actions |
+| Amazon S3 | Security monitoring target |
+| Amazon EC2 | Security group remediation |
+| Amazon RDS | Database security remediation |
+| Amazon SNS | Email alert notifications |
+| Amazon DynamoDB | Audit logging |
+| Amazon CloudWatch | Monitoring and logging |
+| AWS IAM | Access management and permissions |
+
+---
+
+## System Architecture
 
 ```text
-AWS Config
-     │
-     ▼
-EventBridge
-     │
-     ▼
-AWS Lambda
-(Auto-Remediation)
-     │
- ┌───┴───────────┐
- ▼               ▼
-SNS          DynamoDB
-Alerts       Audit Logs
+                    AWS Config
+                         │
+                         ▼
+              Compliance Evaluation
+                         │
+                         ▼
+                  EventBridge Rule
+                         │
+                         ▼
+                 AWS Lambda Function
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+        ▼                ▼                ▼
+    Remediation      SNS Alert      DynamoDB Log
+        │                │                │
+        ▼                ▼                ▼
+      AWS            Email Alert      Audit Trail
+   Resources
 ```
 
 ---
 
-## 🔥 Implemented Compliance Rules
+## Implemented Security Controls
 
-### S3 Public Read Detection
+### S3 Public Access Protection
 
-**Rule**
+AWS Config Rules:
 
 ```text
 s3-bucket-public-read-prohibited
-```
-
-**Automated Action**
-
-- Block public access
-- Remove public bucket policy
-- Send SNS notification
-- Store audit log
-
----
-
-### S3 Public Write Detection
-
-**Rule**
-
-```text
 s3-bucket-public-write-prohibited
 ```
 
-**Automated Action**
+Remediation Actions:
 
-- Block public access
-- Remove public bucket policy
-- Send SNS notification
-- Store audit log
+- Enable S3 Public Access Block
+- Block public ACLs
+- Ignore public ACLs
+- Block public bucket policies
+- Restrict public bucket access
+- Remove insecure bucket policies
 
 ---
 
-### Restricted SSH Detection
+### EC2 Security Group Protection
 
-**Rule**
+AWS Config Rule:
 
 ```text
 restricted-ssh
 ```
 
-**Automated Action**
+Remediation Action:
 
-- Remove inbound SSH rule (Port 22)
-- Send SNS notification
-- Store audit log
+```text
+Remove inbound SSH access from 0.0.0.0/0
+```
 
 ---
 
-### IAM User MFA Monitoring
+### RDP Exposure Protection
 
-**Rule**
+AWS Config Rule:
+
+```text
+restricted-rdp
+```
+
+Remediation Action:
+
+```text
+Remove inbound RDP access from 0.0.0.0/0
+```
+
+---
+
+### Amazon RDS Security Protection
+
+AWS Config Rule:
+
+```text
+rds-instance-public-access-check
+```
+
+Remediation Action:
+
+```text
+Disable public accessibility
+```
+
+---
+
+### MFA Compliance Monitoring
+
+AWS Config Rules:
 
 ```text
 iam-user-mfa-enabled
-```
-
-**Action**
-
-- Alert only
-- Manual remediation required
-
----
-
-### Root Account MFA Monitoring
-
-**Rule**
-
-```text
 root-account-mfa-enabled
 ```
 
-**Action**
-
-- Alert only
-- Manual remediation required
-
----
-
-## 🧠 Lambda Function Responsibilities
-
-The remediation Lambda function performs the following actions:
-
-- Receive AWS Config compliance events
-- Identify violated compliance rule
-- Execute remediation logic
-- Log remediation activity to DynamoDB
-- Send SNS notification
-- Store execution logs in CloudWatch
-
----
-
-## 🔄 Workflow
-
-### Example: Public S3 Bucket
-
-1. An S3 bucket becomes publicly accessible
-2. AWS Config detects the violation
-3. Resource becomes **NON_COMPLIANT**
-4. EventBridge receives the compliance event
-5. Lambda function is invoked
-6. Public access is blocked automatically
-7. SNS sends an email notification
-8. DynamoDB stores an audit record
-9. CloudWatch stores execution logs
-
----
-
-## 🗄️ DynamoDB Audit Logging
-
-**Table Name**
+Current Action:
 
 ```text
-RemediationAuditLog
+Alert Only
 ```
 
-### Logged Information
-
-- Unique ID
-- Timestamp
-- Rule Name
-- Resource ID
-- Resource Type
-- Remediation Status
-- Action Performed
-
-### Example Record
-
-```json
-{
-  "rule": "restricted-ssh",
-  "resource_id": "sg-123456789",
-  "resource_type": "AWS::EC2::SecurityGroup",
-  "status": "REMEDIATED",
-  "action": "SSH port 22 closed"
-}
-```
+Manual remediation is required because enabling MFA requires user interaction.
 
 ---
 
-## 📧 SNS Notification Example
+## Lambda Remediation Workflow
+
+When AWS Config detects a non-compliant resource:
+
+1. AWS Config evaluates resource compliance.
+2. EventBridge receives the compliance event.
+3. EventBridge triggers the remediation Lambda.
+4. Lambda identifies the violated rule.
+5. Appropriate remediation action is executed.
+6. Remediation result is stored in DynamoDB.
+7. SNS notification is sent to administrators.
+8. CloudWatch stores execution logs.
+
+---
+
+## DynamoDB Audit Log Structure
+
+Each remediation action is recorded with:
+
+| Field | Description |
+|---------|-------------|
+| id | Unique record identifier |
+| timestamp | Remediation timestamp |
+| rule | AWS Config rule name |
+| resource_id | Affected resource |
+| resource_type | Resource type |
+| status | Remediation status |
+| action | Remediation action performed |
+
+---
+
+## Project Structure
 
 ```text
-Cloud Misconfiguration Auto-Remediation Report
-
-Rule:
-s3-bucket-public-read-prohibited
-
-Resource:
-example-bucket
-
-Action:
-S3 public access blocked + policy deleted
-
-Status:
-REMEDIATED
+AWS-Cloud-Misconfiguration-Auto-Remediation/
+│
+├── lambda/
+│   └── auto-remediation.py
+│
+├── screenshots/
+│   ├── aws-config-rules.png
+│   ├── eventbridge-rule.png
+│   ├── lambda-function.png
+│   ├── iam-permissions.png
+│   ├── dynamodb-audit-log.png
+│   ├── cloudwatch-logs.png
+│   └── sns-alert-email.png
+│
+├── README.md
+├── LICENSE
+└── .gitignore
 ```
 
 ---
 
-## 📸 Screenshots
+## Screenshots
 
 ### AWS Config Rules
 
@@ -253,73 +280,88 @@ REMEDIATED
 
 ---
 
-### SNS Notification
-
-![SNS Notification](screenshots/sns-alert-email.png)
-
----
-
 ### CloudWatch Logs
 
 ![CloudWatch Logs](screenshots/cloudwatch-logs.png)
 
 ---
 
-## 📁 Repository Structure
+### SNS Email Notification
+
+![SNS Alert Email](screenshots/sns-alert-email.png)
+
+---
+
+## Testing and Validation
+
+The system was tested by intentionally creating AWS cloud security misconfigurations and observing the automated response.
+
+### Example Test Scenario
+
+1. Create a public S3 bucket configuration.
+2. AWS Config detects the violation.
+3. EventBridge receives the compliance event.
+4. Lambda executes remediation.
+5. Public access is blocked automatically.
+6. SNS notification is delivered.
+7. DynamoDB stores remediation details.
+8. CloudWatch records execution logs.
+
+### Result
 
 ```text
-.
-├── lambda/
-│   └── auto-remediate-s3-public-access.py
-│
-├── screenshots/
-│   ├── aws-config-rules.png
-│   ├── eventbridge-rule.png
-│   ├── lambda-function.png
-│   ├── iam-permissions.png
-│   ├── dynamodb-audit-log.png
-│   ├── sns-alert-email.png
-│   └── cloudwatch-logs.png
-│
-├── README.md
-├── LICENSE
-├── .gitignore
-└── progress-log.md
+Status: REMEDIATED
 ```
 
----
-
-## ✅ Current Status
-
-Implemented and configured:
-
-- AWS Config compliance monitoring
-- EventBridge event routing
-- Lambda auto-remediation
-- SNS email notifications
-- DynamoDB audit logging
-- CloudWatch monitoring
+The misconfiguration was successfully detected and corrected automatically without administrator intervention.
 
 ---
 
-## 📈 Future Improvements
+## Benefits of the Proposed Solution
 
-- Principle of Least Privilege IAM policies
+- Improved cloud security posture
+- Faster incident response
+- Reduced human error
+- Automated compliance enforcement
+- Centralized audit logging
+- Scalable serverless architecture
+- Low operational overhead
+
+---
+
+## Limitations
+
+- Some AWS Config rules require manual remediation.
+- MFA-related violations cannot be remediated automatically.
+- Current implementation focuses on selected AWS services.
+- Additional security controls can be added in future versions.
+
+---
+
+## Future Enhancements
+
 - Custom AWS Config Rules
-- Security dashboard
-- Multi-account monitoring
-- AWS Security Hub integration
-- Automated compliance reporting
-- Additional AWS resource coverage
+- Principle of Least Privilege IAM policies
+- Security dashboard and analytics
+- Additional remediation playbooks
+- Multi-account support
+- CloudTrail integration
+- Security reporting dashboard
+- Automated compliance reports
+- AI-assisted remediation recommendations
 
 ---
 
-## 🎓 Academic Purpose
+## Author
 
-This project was developed as a Final Year Project (FYP) to demonstrate cloud security automation, compliance monitoring, and automated remediation using AWS native services.
+**Maged Saeed**
+
+Final Year Project (FYP)
+
+Cloud Security Automation Using AWS Native Services
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License.
