@@ -38,7 +38,7 @@ Detects cloud misconfigurations, automatically remediates public S3 exposure and
 
 ---
 
-## 🌐 Overview
+## Overview
 
 Cloud misconfigurations — such as a publicly readable S3 bucket or an open SSH port — are among the most common causes of security incidents, and fixing them manually is slow and does not scale.
 
