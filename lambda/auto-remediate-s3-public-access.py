@@ -1,29 +1,41 @@
 import boto3
 import json
 import os
+import uuid
 from datetime import datetime
 
-s3_client = boto3.client('s3')
-sns_client = boto3.client('sns')
+s3 = boto3.client('s3')
+ec2 = boto3.client('ec2')
+iam = boto3.client('iam')
+rds = boto3.client('rds')
+sns = boto3.client('sns')
+db = boto3.resource('dynamodb')
 
-SNS_TOPIC_ARN = os.environ.get('SNS_TOPIC_ARN')
+SNS_TOPIC_ARN = os.environ['SNS_TOPIC_ARN']
+DYNAMODB_TABLE = os.environ['DYNAMODB_TABLE']
+
 
 def lambda_handler(event, context):
-    """
-    Auto-remediation for S3 bucket public read access.
-    Triggered by AWS Config compliance change events.
-    """
-    
-    try:
-        # Extract bucket name from Config event
-        config_item = json.loads(event['configurationItem'])
-        bucket_name = config_item['resourceName']
-        
-        print(f"[INFO] Processing bucket: {bucket_name}")
-        
-        # Block public access
-        s3_client.put_public_access_block(
-            Bucket=bucket_name,
+    print(json.dumps(event))
+
+    rule = event['detail']['configRuleName']
+    resource_id = event['detail']['resourceId']
+    resource_type = event['detail']['resourceType']
+
+    result = remediate(rule, resource_id, resource_type)
+
+    log_to_dynamodb(rule, resource_id, resource_type, result)
+    send_notification(rule, resource_id, result)
+
+    return result
+
+
+def remediate(rule, resource_id, resource_type):
+
+    if 's3-bucket-public-read' in rule or 's3-bucket-public-write' in rule:
+
+        s3.put_public_access_block(
+            Bucket=resource_id,
             PublicAccessBlockConfiguration={
                 'BlockPublicAcls': True,
                 'IgnorePublicAcls': True,
@@ -31,46 +43,156 @@ def lambda_handler(event, context):
                 'RestrictPublicBuckets': True
             }
         )
-        
-        print(f"[SUCCESS] Public access blocked for {bucket_name}")
-        
-        # Send SNS notification
-        message = f"""
+
+        try:
+            s3.delete_bucket_policy(Bucket=resource_id)
+        except Exception as e:
+            print("S3 POLICY DELETE ERROR:", str(e))
+
+        return {
+            "status": "REMEDIATED",
+            "action": "S3 public access blocked + policy deleted"
+        }
+
+    elif rule == 'restricted-ssh':
+
+        try:
+            response = ec2.revoke_security_group_ingress(
+                GroupId=resource_id,
+                IpPermissions=[
+                    {
+                        'IpProtocol': 'tcp',
+                        'FromPort': 22,
+                        'ToPort': 22,
+                        'IpRanges': [
+                            {'CidrIp': '0.0.0.0/0'}
+                        ]
+                    }
+                ]
+            )
+
+            print("SSH REMOVED")
+            print(response)
+
+            return {
+                "status": "REMEDIATED",
+                "action": "SSH port 22 closed"
+            }
+
+        except Exception as e:
+
+            print("SSH ERROR:", str(e))
+
+            return {
+                "status": "FAILED",
+                "action": str(e)
+            }
+
+    elif rule == 'restricted-rdp':
+
+        try:
+            response = ec2.revoke_security_group_ingress(
+                GroupId=resource_id,
+                IpPermissions=[
+                    {
+                        'IpProtocol': 'tcp',
+                        'FromPort': 3389,
+                        'ToPort': 3389,
+                        'IpRanges': [
+                            {'CidrIp': '0.0.0.0/0'}
+                        ]
+                    }
+                ]
+            )
+
+            print("RDP REMOVED")
+            print(response)
+
+            return {
+                "status": "REMEDIATED",
+                "action": "RDP port 3389 closed"
+            }
+
+        except Exception as e:
+
+            print("RDP ERROR:", str(e))
+
+            return {
+                "status": "FAILED",
+                "action": str(e)
+            }
+
+    elif rule == 'rds-instance-public-access-check':
+
+        try:
+            rds.modify_db_instance(
+                DBInstanceIdentifier=resource_id,
+                PubliclyAccessible=False,
+                ApplyImmediately=True
+            )
+
+            return {
+                "status": "REMEDIATED",
+                "action": "RDS public access disabled"
+            }
+
+        except Exception as e:
+
+            print("RDS ERROR:", str(e))
+
+            return {
+                "status": "FAILED",
+                "action": str(e)
+            }
+
+    elif rule in ['iam-user-mfa-enabled', 'root-account-mfa-enabled']:
+
+        return {
+            "status": "ALERT_ONLY",
+            "action": "MFA not enabled — manual fix required"
+        }
+
+    else:
+
+        return {
+            "status": "NO_ACTION",
+            "action": f"No remediation for rule: {rule}"
+        }
+
+
+def log_to_dynamodb(rule, resource_id, resource_type, result):
+
+    table = db.Table(DYNAMODB_TABLE)
+
+    table.put_item(
+        Item={
+            'id': str(uuid.uuid4()),
+            'timestamp': datetime.utcnow().isoformat(),
+            'rule': rule,
+            'resource_id': resource_id,
+            'resource_type': resource_type,
+            'status': result['status'],
+            'action': result['action']
+        }
+    )
+
+
+def send_notification(rule, resource_id, result):
+
+    status_emoji = "✅" if result['status'] == "REMEDIATED" else "⚠️"
+
+    sns.publish(
+        TopicArn=SNS_TOPIC_ARN,
+        Subject=f"{status_emoji} [{result['status']}] {rule}",
+        Message=f"""
 Cloud Misconfiguration Auto-Remediation Report
 ===============================================
-Timestamp: {datetime.now().isoformat()}
-Resource Type: S3 Bucket
-Resource Name: {bucket_name}
-Rule: s3-bucket-public-read-prohibited
-Action: Block Public Access
-Status: ✅ REMEDIATED SUCCESSFULLY
-
-The bucket is now private and no longer publicly accessible.
+Timestamp   : {datetime.utcnow().isoformat()}
+Rule        : {rule}
+Resource    : {resource_id}
+Action      : {result['action']}
+Status      : {result['status']}
+================================================
+Secured automatically by FYP Remediation System.
 """
-        
-        sns_client.publish(
-            TopicArn=SNS_TOPIC_ARN,
-            Subject=f'[REMEDIATED] S3 bucket {bucket_name} is now private',
-            Message=message
-        )
-        
-        return {
-            'statusCode': 200,
-            'body': json.dumps({
-                'message': 'Remediation successful',
-                'bucket': bucket_name
-            })
-        }
-        
-    except Exception as e:
-        error_msg = f"[ERROR] Remediation failed: {str(e)}"
-        print(error_msg)
-        
-        # Send failure notification
-        sns_client.publish(
-            TopicArn=SNS_TOPIC_ARN,
-            Subject='[FAILED] S3 remediation failed',
-            Message=f"Error: {error_msg}\n\nEvent: {json.dumps(event, indent=2)}"
-        )
-        
-        raise
+    )
