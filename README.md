@@ -90,30 +90,7 @@ A single exposed resource can compromise an entire cloud environment, and the re
 
 The system is event-driven and fully serverless — no servers to manage, and every component scales and bills on demand.
 
-```mermaid
-flowchart TD
-    A["☁️ AWS Resources<br/>(S3 bucket • EC2 security group)"] -->|Configuration change| B["🔍 AWS Config<br/>managed compliance rules"]
-    B -->|NON_COMPLIANT| C["⚡ Amazon EventBridge<br/>rule: trigger-s3-remediation"]
-    C -->|Invokes| D["🐍 AWS Lambda<br/>remediate-s3-public-access"]
-
-    D --> E["🛠️ Remediation<br/>S3 Public Access Block • Revoke open SSH"]
-    D --> F["📣 Amazon SNS<br/>cloud-misconfig-alerts"]
-    D --> G["🧾 Amazon DynamoDB<br/>RemediationAuditLog"]
-    D --> H["📊 Amazon CloudWatch<br/>execution logs"]
-
-    E -->|Resource secured| A
-    F -->|Email| I["👤 Security Administrator"]
-
-    style A fill:#1f2937,stroke:#FF9900,stroke-width:2px,color:#fff
-    style B fill:#0EA5E9,stroke:#fff,color:#fff
-    style C fill:#FF9900,stroke:#fff,color:#fff
-    style D fill:#6366F1,stroke:#fff,color:#fff
-    style E fill:#22C55E,stroke:#fff,color:#fff
-    style F fill:#EF4444,stroke:#fff,color:#fff
-    style G fill:#8B5CF6,stroke:#fff,color:#fff
-    style H fill:#0EA5E9,stroke:#fff,color:#fff
-    style I fill:#1f2937,stroke:#fff,color:#fff
-```
+![Architecture Diagram](digram.svg)
 
 ---
 
