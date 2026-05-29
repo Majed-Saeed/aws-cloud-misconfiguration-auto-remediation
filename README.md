@@ -90,7 +90,7 @@ A single exposed resource can compromise an entire cloud environment, and the re
 
 The system is event-driven and fully serverless — no servers to manage, and every component scales and bills on demand.
 
-![Architecture Diagram](diagram.svg)
+![Architecture Diagram](architecture-diagram.svg)
 
 ---
 
