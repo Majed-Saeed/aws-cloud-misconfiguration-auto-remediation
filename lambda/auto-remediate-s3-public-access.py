@@ -180,7 +180,7 @@ remediated    = remediate(group_id, violations) if AUTO_REMEDIATE else []
 write_audit_log(group_id, group_name, violations, remediated, "EventBridge")
 save_to_dynamodb(group_id, group_name, violations, remediated, "EventBridge")
 notify(group_id, group_name, ports_summary, remediated)
-print(f"[DONE] Alert sent for {group_id}")
+
 ```
 
 def extract_group_id_from_response(detail):
@@ -400,7 +400,7 @@ f”Time (UTC)     : {datetime.now(timezone.utc).isoformat()}\n\n”
 sns.publish(TopicArn=SNS_TOPIC_ARN,
 Subject=”[ALERT] High-Risk Port Exposed to Internet”,
 Message=message)
-print(f”[SNS] Alert sent for {group_id}”)
+print(f"[DONE] Alert processed and notification sent for {group_id}")
 
 # —————————————————————————
 
