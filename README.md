@@ -3,7 +3,7 @@
 <h1>☁️ AWS Cloud Misconfiguration Auto-Remediation</h1>
 
 <p><b>Serverless, event-driven security automation on AWS.</b><br/>
-Detects cloud misconfigurations, automatically remediates public S3 exposure and open SSH access,<br/>alerts administrators, and maintains a complete audit trail — built and tested in a live AWS environment.</p>
+Detects cloud misconfigurations in real time, automatically remediates public S3 exposure and high-risk open ports,<br/>alerts administrators, and maintains a complete audit trail — built and tested in a live AWS environment.</p>
 
 <br/>
 
@@ -40,9 +40,11 @@ Detects cloud misconfigurations, automatically remediates public S3 exposure and
 
 ## Overview
 
-Cloud misconfigurations — such as a publicly readable S3 bucket or an open SSH port — are among the most common causes of security incidents, and fixing them manually is slow and does not scale.
+Cloud misconfigurations — such as a publicly readable S3 bucket or a high-risk port left open to the internet — are among the most common causes of security incidents, and fixing them manually is slow and does not scale.
 
-This project implements a serverless, event-driven remediation pipeline on AWS. **AWS Config** continuously evaluates resources against managed compliance rules. When a resource becomes non-compliant, **Amazon EventBridge** triggers an **AWS Lambda** function that remediates the misconfiguration, records the event in **DynamoDB**, and sends an email alert through **Amazon SNS**, with full execution logging in **Amazon CloudWatch**.
+This project implements a serverless, event-driven remediation pipeline on AWS. **AWS CloudTrail** records every API call, and **Amazon EventBridge** reacts to security-group changes *within seconds*, invoking an **AWS Lambda** function that scans for high-risk port exposure and closes it automatically. (**AWS Config** managed rules also cover S3 public access and MFA checks.)
+
+Every remediation is recorded in **DynamoDB**, written to an **S3** CSV audit log, and announced by email through **Amazon SNS**, with full execution logging in **Amazon CloudWatch**.
 
 The entire system was deployed and tested in a live AWS account in the `us-east-1` region.
 
@@ -50,7 +52,7 @@ The entire system was deployed and tested in a live AWS account in the `us-east-
 
 | 🔍 Detect | 🛠️ Remediate | 📣 Alert | 🧾 Audit |
 |:---:|:---:|:---:|:---:|
-| AWS Config rules | Lambda function | SNS email | DynamoDB + CloudWatch |
+| Config rules + CloudTrail | Lambda functions | SNS email | DynamoDB + S3 + CloudWatch |
 
 </div>
 
@@ -58,7 +60,7 @@ The entire system was deployed and tested in a live AWS account in the `us-east-
 
 ## 🚨 Problem Statement
 
-A single exposed resource can compromise an entire cloud environment, and the real risk lives in the gap between a misconfiguration appearing and it being detected and fixed. Manual monitoring is slow, easy to miss across many resources, and reactive — problems are often found *after* an incident rather than before one. This project closes that gap automatically for the controls it covers, responding within seconds of a violation.
+A single exposed resource can compromise an entire cloud environment, and the real risk lives in the gap between a misconfiguration appearing and it being detected and fixed. Manual monitoring is slow, easy to miss across many resources, and reactive — problems are often found *after* an incident rather than before one. This project closes that gap automatically for the controls it covers, responding within **seconds** of a violation through its real-time CloudTrail path.
 
 ---
 
@@ -66,21 +68,37 @@ A single exposed resource can compromise an entire cloud environment, and the re
 
 <div align="center">
 
-| Control | AWS Config Rule | Action |
+| Control | Detection Source | Action |
 |:---|:---|:---:|
+| **High-Risk Port Exposure** (SSH, Telnet, RDP, VNC, SQL Server, MySQL, PostgreSQL) | CloudTrail + Config custom rule | 🛠️ &nbsp;Detect + Auto-Remediate |
 | **S3 Public Read** | `s3-bucket-public-read-prohibited` | 🛠️ &nbsp;Detect + Auto-Remediate |
 | **S3 Public Write** | `s3-bucket-public-write-prohibited` | 🛠️ &nbsp;Detect + Auto-Remediate |
 | **SSH Exposure (EC2)** | `restricted-ssh` | 🛠️ &nbsp;Detect + Remediate |
+| **RDS Public Access** | `rds-instance-public-access-check` | 🛠️ &nbsp;Detect + Remediate |
 | **IAM User MFA** | `iam-user-mfa-enabled` | 🔔 &nbsp;Detect + Alert |
 | **Root Account MFA** | `root-account-mfa-enabled` | 🔔 &nbsp;Detect + Alert |
+
+</div>
+
+**High-risk ports monitored by the custom rule**
+
+<div align="center">
+
+| Port | Service | Port | Service |
+|:---:|:---|:---:|:---|
+| **22** | SSH | **3306** | MySQL |
+| **23** | Telnet | **5432** | PostgreSQL |
+| **1433** | SQL Server | **5900** | VNC |
+| **3389** | RDP | | |
 
 </div>
 
 **Supporting capabilities**
 
 - 📣 &nbsp;Email alerting through Amazon SNS
-- 🧾 &nbsp;Audit logging in Amazon DynamoDB
+- 🧾 &nbsp;Audit logging in Amazon DynamoDB **and** a versioned CSV trail in Amazon S3
 - 📊 &nbsp;Execution monitoring in Amazon CloudWatch
+- 🏷️ &nbsp;Whitelisting via resource tag (`Approved = true`) so approved exceptions are skipped
 
 > MFA findings are **alert-only** because enabling MFA requires manual user enrollment (registering a device) and cannot be remediated programmatically. The system records the finding and notifies the administrator instead of acting on it.
 
@@ -90,7 +108,25 @@ A single exposed resource can compromise an entire cloud environment, and the re
 
 The system is event-driven and fully serverless — no servers to manage, and every component scales and bills on demand.
 
-![Architecture Diagram](architecture-diagram.svg)
+```text
+   Security-group change (port opened to the internet)
+                  │
+                  ▼
+        CloudTrail  (records the API call)
+                  │
+                  ▼
+        EventBridge  (matches AuthorizeSecurityGroupIngress)
+                  │
+                  ▼
+        Lambda: FYP1-Custom-Rule  (scans for high-risk ports)
+                  │
+                  ▼
+   Remediate  →  SNS email  →  DynamoDB  →  S3 audit CSV  →  CloudWatch logs
+```
+
+> AWS Config managed rules also feed S3 public-access and MFA findings into the same remediation/alerting layer.
+>
+> The architecture diagram image (`architecture-diagram.svg`) should be regenerated to match this flow.
 
 ---
 
@@ -100,6 +136,7 @@ The system is event-driven and fully serverless — no servers to manage, and ev
 
 ![Lambda](https://img.shields.io/badge/AWS_Lambda-FF9900?style=flat-square&logo=awslambda&logoColor=white)
 ![Config](https://img.shields.io/badge/AWS_Config-FF9900?style=flat-square&logo=amazonwebservices&logoColor=white)
+![CloudTrail](https://img.shields.io/badge/CloudTrail-FF4F8B?style=flat-square&logo=amazonwebservices&logoColor=white)
 ![EventBridge](https://img.shields.io/badge/EventBridge-FF4F8B?style=flat-square&logo=amazonwebservices&logoColor=white)
 ![S3](https://img.shields.io/badge/Amazon_S3-569A31?style=flat-square&logo=amazons3&logoColor=white)
 ![EC2](https://img.shields.io/badge/Amazon_EC2-FF9900?style=flat-square&logo=amazonec2&logoColor=white)
@@ -113,33 +150,34 @@ The system is event-driven and fully serverless — no servers to manage, and ev
 
 | Service | Role in the Project |
 |:---|:---|
-| **AWS Config** | Continuously evaluates resources against the managed compliance rules |
-| **Amazon EventBridge** | Routes `NON_COMPLIANT` compliance events to Lambda |
-| **AWS Lambda** | Executes the remediation logic and triggers alerting and logging |
-| **Amazon S3** | Monitored and auto-remediated target resource |
-| **Amazon EC2** | Monitored for open SSH ingress via `restricted-ssh` |
+| **AWS Config** | Continuously evaluates resources against managed rules, and hosts the custom `honeypot-port-detection` rule |
+| **AWS CloudTrail** | Records security-group API calls so EventBridge can react in real time |
+| **Amazon EventBridge** | Routes both Config compliance events and CloudTrail security-group events to Lambda |
+| **AWS Lambda** | Two functions execute the remediation logic and trigger alerting, auditing, and logging |
+| **Amazon S3** | Monitored/auto-remediated resource **and** destination for the CSV audit log |
+| **Amazon EC2** | Security groups monitored for high-risk port exposure |
 | **Amazon SNS** | Sends email alerts via the `cloud-misconfig-alerts` topic |
-| **Amazon DynamoDB** | Stores the audit trail in the `RemediationAuditLog` table |
+| **Amazon DynamoDB** | Stores the structured audit trail of every remediation |
 | **Amazon CloudWatch** | Captures Lambda execution logs |
-| **AWS IAM** | Provides the Lambda execution role and permissions |
+| **AWS IAM** | Provides the Lambda execution roles and permissions |
 
 ---
 
 ## ⚙️ How It Works
 
 ```text
- 1.  AWS Config evaluates a resource and marks it NON_COMPLIANT
- 2.  EventBridge matches the "Config Rules Compliance Change" event
- 3.  EventBridge invokes the Lambda function (remediate-s3-public-access)
- 4.  Lambda reads the configRuleName, resourceId, and resourceType from the event
- 5.  Lambda applies the matching remediation:
-        • S3  → enable the S3 Public Access Block and remove the bucket policy
-        • SSH → revoke inbound 0.0.0.0/0 ingress on port 22
-        • MFA → record an alert-only finding
- 6.  The outcome is written to the RemediationAuditLog DynamoDB table
- 7.  An email alert is published to the cloud-misconfig-alerts SNS topic
- 8.  CloudWatch records the full execution log
+ 1.  An inbound rule opens a high-risk port to 0.0.0.0/0 (or ::/0)
+ 2.  CloudTrail records the AuthorizeSecurityGroupIngress API call
+ 3.  EventBridge matches the call and invokes FYP1-Custom-Rule within seconds
+ 4.  Lambda fetches the security group, skips it if tagged Approved=true,
+     and scans all ingress rules against the 7 high-risk ports
+ 5.  If AUTO_REMEDIATE=true, Lambda revokes each offending rule
+ 6.  Lambda writes a DynamoDB record, appends to the S3 CSV audit log,
+     and sends an SNS email alert
+ 7.  CloudWatch records the full execution log
 ```
+
+> AWS Config managed rules (S3 public access, MFA) are handled the same way through the `remediate-s3-public-access` Lambda.
 
 <details>
 <summary><b>EventBridge event pattern (as deployed)</b></summary>
@@ -148,49 +186,58 @@ The system is event-driven and fully serverless — no servers to manage, and ev
 
 ```json
 {
-  "source": ["aws.config"],
-  "detail-type": ["Config Rules Compliance Change"],
+  "source": ["aws.ec2"],
+  "detail-type": ["AWS API Call via CloudTrail"],
   "detail": {
-    "configRuleName": [
-      "s3-bucket-public-read-prohibited",
-      "s3-bucket-public-write-prohibited",
-      "restricted-ssh",
-      "iam-user-mfa-enabled",
-      "root-account-mfa-enabled"
-    ],
-    "newEvaluationResult": {
-      "complianceType": ["NON_COMPLIANT"]
-    }
+    "eventSource": ["ec2.amazonaws.com"],
+    "eventName": ["AuthorizeSecurityGroupIngress", "CreateSecurityGroup"]
   }
 }
 ```
 
 </details>
 
+> **Important:** detection depends on **CloudTrail being enabled**. EventBridge cannot see security-group API calls unless a CloudTrail trail is actively logging — this was the key requirement for the system to function.
+
 ---
 
 ## 🔧 Configuration & IAM
 
-**Lambda environment variables**
+**`FYP1-Custom-Rule` environment variables**
 
 | Key | Value |
 |:---|:---|
-| `DYNAMODB_TABLE` | `RemediationAuditLog` |
+| `AUTO_REMEDIATE` | `true` |
 | `SNS_TOPIC_ARN` | `arn:aws:sns:us-east-1:************:cloud-misconfig-alerts` |
+| `DYNAMODB_TABLE` | `fyp-security-alerts` |
+| `AUDIT_BUCKET` | `fyp-audit-logs-************` |
 
-**Lambda execution role — attached policies**
+**`FYP1-Custom-Rule` execution role — least-privilege inline policy**
 
-```text
-AmazonS3FullAccess
-AmazonEC2FullAccess
-AmazonRDSFullAccess
-AmazonDynamoDBFullAccess
-AmazonSNSFullAccess
-IAMFullAccess
-AWSLambdaBasicExecutionRole-... (customer managed)
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    { "Effect": "Allow",
+      "Action": ["ec2:DescribeSecurityGroups", "ec2:RevokeSecurityGroupIngress"],
+      "Resource": "*" },
+    { "Effect": "Allow",
+      "Action": "sns:Publish",
+      "Resource": "arn:aws:sns:us-east-1:************:cloud-misconfig-alerts" },
+    { "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject"],
+      "Resource": "arn:aws:s3:::fyp-audit-logs-************/*" },
+    { "Effect": "Allow",
+      "Action": "dynamodb:PutItem",
+      "Resource": "arn:aws:dynamodb:us-east-1:************:table/fyp-security-alerts" },
+    { "Effect": "Allow",
+      "Action": "config:PutEvaluations",
+      "Resource": "*" }
+  ]
+}
 ```
 
-These are AWS managed full-access policies covering the services the function interacts with. Scoping them down to least-privilege permissions is part of planned future work.
+> The high-risk port Lambda already runs on a tightly scoped, least-privilege policy. Applying the same scoping to the `remediate-s3-public-access` role (which currently uses broad AWS managed policies) is part of planned future work.
 
 ---
 
@@ -202,27 +249,27 @@ These are AWS managed full-access policies covering the services the function in
 <tr>
 <td width="50%" align="center">
 <img src="screenshots/aws-config-rules.png" alt="AWS Config Rules"/><br/>
-<sub><b>AWS Config Rules</b><br/>Managed rules and compliance status</sub>
+<sub><b>AWS Config Rules</b><br/>Managed + custom rules and compliance status</sub>
 </td>
 <td width="50%" align="center">
 <img src="screenshots/eventbridge-rule.png" alt="EventBridge Rule"/><br/>
-<sub><b>EventBridge Rule</b><br/>trigger-s3-remediation on NON_COMPLIANT</sub>
+<sub><b>EventBridge Rule</b><br/>detect-high-risk-sg-ports → FYP1-Custom-Rule</sub>
 </td>
 </tr>
 <tr>
+<td width="50%" align="center">
+<img src="screenshots/cloudtrail.png" alt="CloudTrail Trail"/><br/>
+<sub><b>CloudTrail Trail</b><br/>management-events — Logging active</sub>
+</td>
 <td width="50%" align="center">
 <img src="screenshots/lambda-function.png" alt="Lambda Function"/><br/>
-<sub><b>Lambda Function</b><br/>remediate-s3-public-access (Python 3.12)</sub>
-</td>
-<td width="50%" align="center">
-<img src="screenshots/iam-permissions.png" alt="IAM Permissions"/><br/>
-<sub><b>IAM Permissions</b><br/>Execution role and attached policies</sub>
+<sub><b>Lambda Function</b><br/>FYP1-Custom-Rule (Python 3.12)</sub>
 </td>
 </tr>
 <tr>
 <td width="50%" align="center">
-<img src="screenshots/dynamodb-audit-log.png" alt="DynamoDB Audit Log"/><br/>
-<sub><b>DynamoDB Audit Log</b><br/>RemediationAuditLog records</sub>
+<img src="screenshots/iam-permissions.png" alt="IAM Permissions"/><br/>
+<sub><b>IAM Permissions</b><br/>Least-privilege execution role</sub>
 </td>
 <td width="50%" align="center">
 <img src="screenshots/cloudwatch-logs.png" alt="CloudWatch Logs"/><br/>
@@ -232,7 +279,7 @@ These are AWS managed full-access policies covering the services the function in
 <tr>
 <td colspan="2" align="center">
 <img src="screenshots/sns-alert-email.png" alt="SNS Alert Email" width="50%"/><br/>
-<sub><b>SNS Email Alert</b><br/>Notification delivered after remediation</sub>
+<sub><b>SNS Email Alert</b><br/>High-Risk Port Exposed — AUTO-REMEDIATED</sub>
 </td>
 </tr>
 </table>
@@ -243,25 +290,31 @@ These are AWS managed full-access policies covering the services the function in
 
 ## 🧪 Results
 
-The pipeline was validated by intentionally creating a publicly accessible S3 bucket (`fyp-public-test-123`) and observing the automated response.
+The pipeline was validated by intentionally exposing high-risk ports on a security group and observing the automated response.
 
-Each remediation event produced an AWS Config evaluation marked `NON_COMPLIANT`, an EventBridge trigger, a Lambda execution of roughly one second, an SNS email notification, a DynamoDB audit record, and a CloudWatch execution log.
+- Opening **SSH (22)** to `0.0.0.0/0` triggered detection and remediation, with a `[REMEDIATED] restricted-ssh` email confirming the port was closed.
+- Opening **RDP (3389)** to `0.0.0.0/0` triggered the real-time CloudTrail path: EventBridge invoked `FYP1-Custom-Rule`, the port was auto-closed, and an `[ALERT] High-Risk Port Exposed to Internet` email was delivered showing **Action Taken: AUTO-REMEDIATED**.
+- S3 public-access exposure was remediated through the compliance path, returning the S3 Config rules to `Compliant`.
+
+Each event produced a Lambda execution of roughly one second, an SNS email notification, a DynamoDB audit record, an entry in the S3 CSV audit log, and a CloudWatch execution log.
 
 <details open>
-<summary><b>Sample DynamoDB audit record</b></summary>
+<summary><b>Sample SNS alert — real-time port remediation</b></summary>
 
 <br/>
 
-```json
-{
-  "id": "fec026ec-52c3-42bb-...",
-  "timestamp": "2026-05-24T21:03:37Z",
-  "rule": "s3-bucket-public-read-prohibited",
-  "resource_id": "fyp-public-test-123",
-  "resource_type": "AWS::S3::Bucket",
-  "action": "S3 public access blocked + policy deleted",
-  "status": "REMEDIATED"
-}
+```text
+========================================
+  AWS SECURITY ALERT
+  High-Risk Port Exposure Detected
+========================================
+
+Security Group : default (sg-05398b950b0f36af2)
+Exposed Ports  : 3389 (RDP)
+Action Taken   : AUTO-REMEDIATED
+Ports Closed   : 3389 (RDP)
+Time (UTC)     : 2026-06-02T01:12:58Z
+========================================
 ```
 
 </details>
@@ -272,8 +325,6 @@ Each remediation event produced an AWS Config evaluation marked `NON_COMPLIANT`,
 
 </div>
 
-After remediation, the S3 Config rules return to `Compliant`, confirming that public access was blocked automatically without administrator intervention.
-
 ---
 
 ## 📁 Repository Structure
@@ -282,14 +333,15 @@ After remediation, the S3 Config rules return to `Compliant`, confirming that pu
 AWS-Cloud-Misconfiguration-Auto-Remediation/
 │
 ├── lambda/
-│   └── auto-remediation.py        # Remediation function
+│   ├── auto-remediation.py        # remediate-s3-public-access (compliance path)
+│   └── high-risk-ports.py         # FYP1-Custom-Rule (real-time port detection)
 │
 ├── screenshots/                   # Implementation evidence
 │   ├── aws-config-rules.png
 │   ├── eventbridge-rule.png
+│   ├── cloudtrail-trail.png
 │   ├── lambda-function.png
 │   ├── iam-permissions.png
-│   ├── dynamodb-audit-log.png
 │   ├── cloudwatch-logs.png
 │   └── sns-alert-email.png
 │
@@ -297,42 +349,6 @@ AWS-Cloud-Misconfiguration-Auto-Remediation/
 ├── LICENSE
 └── .gitignore
 ```
-
----
-
-## 🚀 Deployment
-
-All resources were provisioned through the AWS Management Console in the `us-east-1` (N. Virginia) region for demonstration purposes.
-
-1. Enable AWS Config and add the managed rules.
-2. Create the SNS topic `cloud-misconfig-alerts` and subscribe an email endpoint.
-3. Create the DynamoDB table `RemediationAuditLog` with partition key `id`.
-4. Create the Lambda function `remediate-s3-public-access` (Python 3.12) and set its environment variables.
-5. Attach the IAM execution role with the required service permissions.
-6. Create the EventBridge rule `trigger-s3-remediation` to invoke Lambda on `NON_COMPLIANT` compliance-change events.
-7. Test the pipeline with a deliberately public S3 bucket and verify remediation, alerting, logging, and auditing.
-
----
-
-## ⚠️ Limitations
-
-- The fully verified end-to-end remediation is the S3 public access control; SSH remediation is implemented and triggered by the same pipeline.
-- MFA controls are alert-only, since enabling MFA requires manual user enrollment.
-- The Lambda role uses broad AWS managed policies rather than least-privilege policies.
-- Deployment is performed manually through the AWS Console rather than Infrastructure-as-Code.
-- The system runs in a single account and single region (`us-east-1`).
-
----
-
-## 🗺️ Future Work
-
-- Implement strict least-privilege IAM policies for the Lambda role.
-- Activate RDP and RDS public-access remediation (handlers are already implemented in the Lambda and require the corresponding AWS Config rules to be enabled).
-- Improve error handling so the recorded status always reflects the true result of each remediation.
-- Package the stack as Infrastructure-as-Code using Terraform or AWS SAM.
-- Add multi-account support through AWS Organizations.
-- Integrate AWS CloudTrail for deeper forensic context.
-- Build a security dashboard and automated compliance reports.
 
 ---
 
