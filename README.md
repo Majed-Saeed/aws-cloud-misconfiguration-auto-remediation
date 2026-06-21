@@ -1,7 +1,7 @@
 <div align="center">
 
 # ☁️ AWS Cloud Misconfiguration Auto-Remediation
-### with Real-Time Risk Scoring & Evasion-Resistant Detection
+### with Real-Time Risk Scoring & Evasion-Resistant Detection & Score Risk
 
 **A serverless, event-driven security pipeline that detects cloud misconfigurations in real time, scores their risk.**
 
