@@ -197,6 +197,98 @@ Fully serverless and event-driven — no servers to manage; every component scal
 
 ---
 
+## 🌐 Network Topology & Architecture
+
+```mermaid
+flowchart TB
+    ATTACKER(["🌍 Internet<br/><sub>admin / attacker opens a high-risk port</sub>"])
+
+    subgraph CLOUD["☁️ AWS Cloud Account"]
+        direction TB
+
+        subgraph REGION["🌎 Region · us-east-1"]
+            direction TB
+
+            %% ---------- VPC (network topology) ----------
+            subgraph VPC["🏠 VPC · 10.0.0.0/16"]
+                direction TB
+                IGW["🚪 Internet Gateway"]
+                subgraph SUBNET["🔵 Public Subnet · 10.0.1.0/24"]
+                    direction TB
+                    EC2["🖥️ EC2 Instance"]
+                    SG["🛡️ Security Group<br/><sub>monitored for high-risk ports</sub>"]
+                    EC2 --- SG
+                end
+                IGW --> SUBNET
+            end
+
+            %% ---------- Managed services plane (architecture) ----------
+            subgraph PLANE["⚙️ AWS Managed Services Plane (outside VPC)"]
+                direction TB
+
+                subgraph DETECT["🔍 Detection"]
+                    direction TB
+                    CT["📜 CloudTrail"]
+                    EB["🔀 EventBridge"]
+                    CT --> EB
+                end
+
+                CFG["🛡️ AWS Config<br/><sub>honeypot + S3/SSH/MFA rules</sub>"]
+
+                subgraph BRAIN["🧠 Lambda · FYP1-Custom-Rule"]
+                    direction TB
+                    L1["1️⃣ CIDR Breadth Analysis"]
+                    L2["2️⃣ Risk Scoring Engine 0–100"]
+                    L3["3️⃣ Auto-Remediation"]
+                    L1 --> L2 --> L3
+                end
+
+                subgraph OUT["📤 Alert · Audit"]
+                    direction TB
+                    SNS["📧 SNS Email"]
+                    DDB["🗄️ DynamoDB"]
+                    S3["🪣 S3 CSV Log"]
+                    CW["📊 CloudWatch"]
+                end
+            end
+
+            IAM["🔐 IAM Role<br/><sub>least-privilege permissions</sub>"]
+        end
+    end
+
+    %% ---------- DATA FLOW ----------
+    ATTACKER ==> IGW
+    SG -.->|"API call logged"| CT
+    EB ==>|"invoke"| L1
+    CFG ==>|"compliance event"| L2
+    L3 -->|"🔧 revoke exact CIDR"| SG
+    L3 --> SNS
+    L3 --> DDB
+    L3 --> S3
+    L3 --> CW
+    IAM -.->|"authorizes"| BRAIN
+
+    %% ---------- STYLES ----------
+    classDef net    fill:#FF9900,stroke:#9E5E00,color:#1A1A1A,stroke-width:1.5px;
+    classDef detect fill:#FF4F8B,stroke:#9B2B55,color:#fff,stroke-width:1.5px;
+    classDef brain  fill:#FF9900,stroke:#9E5E00,color:#1A1A1A,stroke-width:1.5px;
+    classDef comply fill:#4053D6,stroke:#222C7A,color:#fff,stroke-width:1.5px;
+    classDef store  fill:#22C55E,stroke:#11652C,color:#fff,stroke-width:1.5px;
+    classDef sec    fill:#DD344C,stroke:#7A1020,color:#fff,stroke-width:1.5px;
+    classDef ext    fill:#1A1A1A,stroke:#000,color:#fff,stroke-width:2px;
+
+    class ATTACKER ext;
+    class IGW,EC2,SG net;
+    class CT,EB detect;
+    class CFG comply;
+    class L1,L2,L3 brain;
+    class SNS,DDB,S3,CW store;
+    class IAM sec;
+```
+
+
+
+
 ## 🧰 AWS Services Used
 
 <div align="center">
