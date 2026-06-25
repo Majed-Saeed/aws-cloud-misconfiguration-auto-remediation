@@ -400,7 +400,7 @@ flowchart TB
 
 ---
 
-## 🧪 Results
+## Results
 
 The system was evaluated with an **automated test harness** that exercises the **live deployed Lambda** and records results to CSV. Critically, the harness does **not** recalculate anything locally — for scoring it reads the **actual score the Lambda produced**, parsed from CloudWatch Logs (with DynamoDB as a fallback); for detection it checks whether the **real Lambda removed the offending rule**.
 
@@ -522,7 +522,7 @@ The scores rank severity sensibly: "all traffic open" tops the scale, remote-she
 
 ---
 
-## 🚀 Deployment
+## Deployment
 
 **Prerequisites:** an AWS account, CloudTrail logging enabled, AWS CLI configured.
 
@@ -534,7 +534,7 @@ The scores rank severity sensibly: "all traffic open" tops the scale, remote-she
 
 ---
 
-## 🧫 Test Harness
+## Test Harness
 
 `fyp_test_harness.py` automates the full evaluation against the live system:
 
@@ -550,7 +550,7 @@ python fyp_test_harness.py
 ```
 
 
-## 📜 License
+## License
 
 Released under the **MIT License** — see [LICENSE](LICENSE).
 
