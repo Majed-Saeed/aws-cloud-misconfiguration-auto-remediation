@@ -73,7 +73,7 @@ This project is an **enhancement** of native cloud security tooling. Standard AW
 
 ---
 
-## 🧮 Risk Scoring Engine
+## 🧾 Risk Scoring Engine
 
 Rather than treating every exposed port identically, the engine assigns each finding a **0–100 risk score** built from four weighted factors. This lets an administrator prioritise: a database port briefly exposed to a narrow range is not the same emergency as RDP opened to the entire internet.
 
