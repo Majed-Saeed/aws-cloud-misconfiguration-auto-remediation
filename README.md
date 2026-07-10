@@ -59,7 +59,7 @@ The system was deployed and tested in a **live AWS account** (`us-east-1`), and 
 
 ---
 
-## 🎯 Key Contribution
+##  Key Contribution
 
 This project is an **enhancement** of native cloud security tooling. Standard AWS Config rules answer one binary question — *"is this resource compliant?"* — and, by default, take no action. This work adds three capabilities that AWS Config does not provide out of the box:
 
