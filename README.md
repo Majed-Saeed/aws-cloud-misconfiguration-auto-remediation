@@ -51,7 +51,7 @@ The system was deployed and tested in a **live AWS account** (`us-east-1`), and 
 
 <div align="center">
 
-| 🔍 Detect | 🧮 Score | 🛠️ Remediate | 📣 Alert | 🧾 Audit |
+| 🔍 Detect | Score | 🛠️ Remediate | 📣 Alert | 🧾 Audit |
 |:---:|:---:|:---:|:---:|:---:|
 | CloudTrail + Config | Risk Engine (0–100) | Lambda revoke | SNS email | DynamoDB · S3 · CloudWatch |
 
