@@ -25,7 +25,7 @@
 
 <div align="center">
 
-| 🎓 Project | 🌍 Region | 🐍 Runtime | ⚡ Model | ✅ Status |
+| 🎓 Project | 🌍 Region | 📉 Runtime | ⚡ Model | ✅ Status |
 |:---:|:---:|:---:|:---:|:---:|
 | Final Year Project | us-east-1 | Python 3.12 | Event-driven | Working & tested |
 
